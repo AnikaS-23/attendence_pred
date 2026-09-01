@@ -2,7 +2,7 @@
 
 ## Attendance Risk Prediction & Early Warning System
 
-Attendora is an attendance monitoring and prediction system designed to help students and faculty identify attendance risks before they become a serious problem.
+Vigil is an attendance monitoring and prediction system designed to help students and faculty identify attendance risks before they become a serious problem.
 
 Traditional attendance systems mainly show a student's current attendance percentage. Attendora goes one step further by analyzing attendance patterns, predicting future attendance, and providing early warnings when a student is at risk of falling below the required 75% attendance.
 
@@ -14,11 +14,11 @@ For example, a student with 78% attendance may appear safe today, but if their a
 
 Faculty members also have to manually monitor large numbers of students to identify such cases.
 
-Attendora aims to make this process proactive rather than reactive.
+Vigil aims to make this process proactive rather than reactive.
 
 ## Our Solution
 
-Attendora analyzes historical attendance data to:
+Vigil analyzes historical attendance data to:
 
 - Calculate current attendance
 - Track attendance trends
@@ -101,7 +101,7 @@ Different dashboards provide relevant information depending on whether the user 
 ## Project Structure
 
 ```text
-Attendora/
+Vigil/
 │
 ├── data/
 │   ├── attendance_dataset.csv
