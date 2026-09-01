@@ -100,7 +100,7 @@ Different dashboards provide relevant information depending on whether the user 
 
 ## Project Structure
 
-''text
+text
 Attendora/
 │
 ├── data/
