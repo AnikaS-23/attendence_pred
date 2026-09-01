@@ -289,7 +289,7 @@ def analyze_all_students(df, periods_ahead=4, threshold=85):
 if __name__ == "__main__":
     # Define input and output paths
     base_dir = os.path.dirname(os.path.abspath(__file__))
-    input_csv = os.path.join(base_dir, "data", "attendance_dataset.csv.xls")
+    input_csv = os.path.join(base_dir, "data", "attendance_dataset.csv")
     output_csv = os.path.join(base_dir, "prediction_results.csv")
     
     if os.path.exists(input_csv):
