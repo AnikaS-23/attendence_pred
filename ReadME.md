@@ -1,4 +1,4 @@
-# Attendora
+# Vigil
 
 ## Attendance Risk Prediction & Early Warning System
 
