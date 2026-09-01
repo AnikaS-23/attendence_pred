@@ -41,8 +41,8 @@ def generate_warning_message(row):
         return (f"⚠️ HIGH RISK in {subject}: Attendance is {current}%, "
                 f"projected to drop to {predicted}%. Act now.")
     elif risk == 'MEDIUM':
-    gap = round(current - 75, 1)
-    return (f"🟡 MEDIUM RISK in {subject}: Attendance is {current}%, "
+        gap = round(current - 75, 1)
+        return (f"🟡 MEDIUM RISK in {subject}: Attendance is {current}%, "
             f"{gap} points above the 75% cutoff. Predicted: {predicted}%.")
             
     else:
