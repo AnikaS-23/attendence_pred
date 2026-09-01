@@ -100,15 +100,17 @@ Different dashboards provide relevant information depending on whether the user 
 
 ## Project Structure
 
-text
+```text
 Attendora/
 │
 ├── data/
-│   └── attendance.csv
+│   ├── attendance_dataset.csv
+│   └── teacher_dataset_6.csv
 │
-├── data_processing.py
 ├── prediction.py
 ├── risk_recovery.py
 ├── dashboard.py
 ├── app.py
-└── README.md
+└── ReadME.md
+
+
