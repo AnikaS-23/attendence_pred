@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np 
+
 import os
 from sklearn.linear_model import LinearRegression
 
@@ -133,7 +134,7 @@ def predict_future_attendance(attendance_values, periods_ahead=4):
     # 6. Return predicted_attendance and regression_slope
     return predicted_attendance, regression_slope
 
-def classify_risk(current_attendance, predicted_attendance, trend_slope, threshold=85):
+def classify_risk(current_attendance, predicted_attendance, trend_slope, threshold=75):
     """
     Classifies the attendance risk into HIGH, MEDIUM, or LOW and calculates a numerical risk score.
     
@@ -149,18 +150,18 @@ def classify_risk(current_attendance, predicted_attendance, trend_slope, thresho
     # -- RISK LEVEL CLASSIFICATION --
     
     # HIGH RISK: 
-    # - Current attendance is already breached (below 85) OR
-    # - EARLY WARNING: Current is >= 85, but it is predicted to fall below 85.
+    # - Current attendance is already breached (below threshold) OR
+    # - EARLY WARNING: Current is >= threshold, but it is predicted to fall below threshold.
     if current_attendance < threshold or (current_attendance >= threshold and predicted_attendance < threshold):
         risk_level = 'HIGH'
         
     # LOW RISK:
-    # - Current is safe (>90) AND predicted is safe (>90) AND trend is not significantly declining (slope >= -0.5)
-    elif current_attendance > 90 and predicted_attendance > 90 and trend_slope >= -0.5:
+    # - Current is safe (> threshold + 5) AND predicted is safe (> threshold + 5) AND trend is not significantly declining (slope >= -0.5)
+    elif current_attendance > (threshold + 5) and predicted_attendance > (threshold + 5) and trend_slope >= -0.5:
         risk_level = 'LOW'
         
     # MEDIUM RISK:
-    # - Catch-all for scenarios where attendance is between 85-90, predicted is between 85-90, 
+    # - Catch-all for scenarios where attendance is between threshold and threshold+5, predicted is between threshold and threshold+5, 
     #   or there's a significant decline (slope < -0.5) but it hasn't triggered the HIGH risk threshold yet.
     else:
         risk_level = 'MEDIUM'
@@ -180,14 +181,14 @@ def classify_risk(current_attendance, predicted_attendance, trend_slope, thresho
         
     return risk_level, round(risk_score, 1)
 
-def analyze_student_attendance(attendance_values, periods_ahead=4, threshold=85):
+def analyze_student_attendance(attendance_values, periods_ahead=4, threshold=75):
     """
     Analyzes student attendance history to generate trends, predictions, and risk classifications.
     
     Args:
         attendance_values (list, pandas Series, or numpy array): Chronological attendance history.
         periods_ahead (int): Number of periods into the future to predict (default 4).
-        threshold (float): The attendance threshold for intervention (default 85).
+        threshold (float): The attendance threshold for intervention (default 75).
         
     Returns:
         dict: Analysis results.
@@ -230,7 +231,7 @@ def analyze_student_attendance(attendance_values, periods_ahead=4, threshold=85)
         "risk_level": risk_level
     }
 
-def analyze_all_students(df, periods_ahead=4, threshold=85):
+def analyze_all_students(df, periods_ahead=4, threshold=75):
     """
     Analyzes attendance for all students and subjects in the dataset.
     
@@ -289,7 +290,7 @@ def analyze_all_students(df, periods_ahead=4, threshold=85):
 if __name__ == "__main__":
     # Define input and output paths
     base_dir = os.path.dirname(os.path.abspath(__file__))
-    input_csv = os.path.join(base_dir, "data", "attendance_dataset.csv")
+    input_csv = os.path.join(base_dir, "data", "attendance_dataset.csv.xls")
     output_csv = os.path.join(base_dir, "prediction_results.csv")
     
     if os.path.exists(input_csv):
@@ -314,8 +315,8 @@ if __name__ == "__main__":
         
         # 3. Extract the Early Warning students
         early_warning_df = results_df[
-            (results_df['current_attendance'] >= 85) & 
-            (results_df['predicted_attendance'] < 85)
+            (results_df['current_attendance'] >= 75) & 
+            (results_df['predicted_attendance'] < 75)
         ]
         
         # 4. Save the main DataFrame
