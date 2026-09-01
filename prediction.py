@@ -1,92 +1,97 @@
-import pandas as pd
-import numpy as np 
+"""
+Attendance Risk Prediction System
 
+Purpose:
+Analyze historical attendance trends and predict whether a student is at risk of falling below the required 75 percent attendance threshold.
+
+Main Feature:
+Early warning for students who are currently above 75 percent but are predicted to fall below 75 percent.
+"""
+
+# ==================================================
+# 1. IMPORTS
+# ==================================================
 import os
+import pandas as pd
+import numpy as np
 from sklearn.linear_model import LinearRegression
 
+
+# ==================================================
+# 2. CONFIGURATION
+# ==================================================
+ATTENDANCE_THRESHOLD = 75
+PREDICTION_PERIODS = 4
+
+
+# ==================================================
+# 3. DATA LOADING AND VALIDATION
+# ==================================================
 def load_attendance_data(file_path):
     """
-    Loads and cleans the attendance dataset.
+    Loads and validates the real attendance dataset.
     
-    Args:
-        file_path (str): Path to the attendance CSV file.
-        
-    Returns:
-        pandas.DataFrame: Cleaned attendance data.
+    Required Columns:
+    - student_id
+    - subject
+    - week
+    - attendance_percentage
     """
     try:
-        # 1. Even though it's called .xls, the user hinted and inspecting it proved it's a CSV format.
         df = pd.read_csv(file_path)
     except Exception as e:
         raise ValueError(f"Could not load data from {file_path}. Error: {e}")
         
-    # 2. Validate required columns exist
     required_columns = ['student_id', 'subject', 'week', 'attendance_percentage']
     missing_cols = [col for col in required_columns if col not in df.columns]
     
     if missing_cols:
-        raise ValueError(f"Missing required columns in dataset: {missing_cols}")
+        raise ValueError(f"Missing required columns: {missing_cols}")
         
-    # 3. Drop phone_number as requested, but keep metadata (name, etc.)
-    cols_to_drop = ['phone_number']
-    existing_cols_to_drop = [col for col in cols_to_drop if col in df.columns]
-    if existing_cols_to_drop:
-        df = df.drop(columns=existing_cols_to_drop)
+    # Drop unnecessary columns
+    if 'phone_number' in df.columns:
+        df = df.drop(columns=['phone_number'])
         
-    # Ensure numeric types where appropriate
+    # Ensure attendance is numeric
     df['attendance_percentage'] = pd.to_numeric(df['attendance_percentage'], errors='coerce')
     
-    # 4. Extract numeric week number from values like "Week 1"
+    # Convert 'Week X' strings into chronological numeric order (1.0, 2.0...)
     df['week'] = df['week'].astype(str).str.extract(r'(\d+)')[0].astype(float)
-    
     df['week'] = pd.to_numeric(df['week'], errors='coerce')
     
-    # Check for missing values
+    # Drop rows with invalid week or attendance
     if df[['week', 'attendance_percentage']].isnull().any().any():
         df = df.dropna(subset=['week', 'attendance_percentage'])
         
-    # 5. Sort the DataFrame by student_id, subject, numeric week
+    # Sort data chronologically to ensure accurate trend analysis
     df = df.sort_values(by=['student_id', 'subject', 'week'])
     
-    # 7. Return cleaned DataFrame
     return df.reset_index(drop=True)
 
+
+# ==================================================
+# 4. TREND ANALYSIS
+# ==================================================
 def calculate_trend(attendance_values):
     """
-    Calculates the linear slope of attendance over time using numpy.polyfit.
-    
-    Args:
-        attendance_values (list, pandas Series, or numpy array): Chronological sequence of attendance percentages.
-        
-    Returns:
-        float: The calculated linear slope.
+    Calculates linear slope over time.
     """
-    try:
-        y = np.array(attendance_values, dtype=float)
-    except (ValueError, TypeError):
-        raise ValueError("attendance_values must be convertible to a numeric array.")
-        
-    # Require at least 2 valid values
+    y = np.array(attendance_values, dtype=float)
     if len(y) < 2:
-        raise ValueError("At least 2 attendance values are required to calculate a trend.")
+        raise ValueError("At least 2 values are required.")
         
-    # Generate chronological indexes based on the length
     x = np.arange(len(y))
-    
-    # Calculate slope (degree=1 polynomial)
     slope, intercept = np.polyfit(x, y, 1)
     
     return float(slope)
 
+
 def get_trend_direction(slope):
     """
-    Classifies the attendance trend direction based on the calculated slope.
-    
-    Args:
-        slope (float): The numerical slope from calculate_trend.
-        
-    Returns:
-        str: 'IMPROVING', 'DECLINING', or 'STABLE'.
+    Interprets the slope direction:
+    positive slope = improving attendance
+    negative slope = declining attendance
+    near-zero slope = stable attendance
     """
     if slope > 0.5:
         return 'IMPROVING'
@@ -95,83 +100,65 @@ def get_trend_direction(slope):
     else:
         return 'STABLE'
 
-def predict_future_attendance(attendance_values, periods_ahead=4):
+
+# ==================================================
+# 5. FUTURE ATTENDANCE PREDICTION
+# ==================================================
+def predict_future_attendance(attendance_values, periods_ahead=PREDICTION_PERIODS):
     """
-    Predicts future attendance using linear regression.
+    Uses Linear Regression to predict future attendance.
     
-    Args:
-        attendance_values (list, pandas Series, or numpy array): Chronological sequence of attendance percentages.
-        periods_ahead (int): Number of periods into the future to predict.
-        
-    Returns:
-        tuple: (list of predicted_attendance, float regression_slope)
+    - X represents chronological time steps.
+    - y represents historical attendance percentages.
+    - Linear Regression captures the linear trend effectively over small time series.
     """
-    try:
-        y = np.array(attendance_values, dtype=float)
-    except (ValueError, TypeError):
-        raise ValueError("attendance_values must be convertible to a numeric array.")
-        
-    # Handle insufficient data safely
+    y = np.array(attendance_values, dtype=float)
     if len(y) < 2:
-        raise ValueError("At least 2 attendance values are required for prediction.")
+        raise ValueError("At least 2 values are required.")
         
-    # 2. Use chronological index positions as the time feature X
     X = np.arange(len(y)).reshape(-1, 1)
     
-    # 4. Train the model
     model = LinearRegression()
     model.fit(X, y)
     
-    # 5. Predict attendance periods_ahead into the future
+    # Predict future attendance steps
     future_X = np.arange(len(y), len(y) + periods_ahead).reshape(-1, 1)
     predicted_attendance = model.predict(future_X)
     
-    # 7. Clamp predicted_attendance between 0 and 100
+    # Limit predictions between 0 and 100 since attendance cannot exceed those bounds
     predicted_attendance = np.clip(predicted_attendance, 0, 100).round(1).tolist()
     
     regression_slope = float(model.coef_[0])
     
-    # 6. Return predicted_attendance and regression_slope
     return predicted_attendance, regression_slope
 
-def classify_risk(current_attendance, predicted_attendance, trend_slope, threshold=75):
+
+# ==================================================
+# 6. RISK CLASSIFICATION
+# ==================================================
+def classify_risk(current_attendance, predicted_attendance, trend_slope, threshold=ATTENDANCE_THRESHOLD):
     """
-    Classifies the attendance risk into HIGH, MEDIUM, or LOW and calculates a numerical risk score.
-    
-    Args:
-        current_attendance (float): Current attendance percentage.
-        predicted_attendance (float): Predicted future attendance percentage.
-        trend_slope (float): The numerical trend slope.
-        threshold (float): The attendance threshold for intervention (default 85).
-        
-    Returns:
-        tuple: (str risk_level, float risk_score [0-100])
+    Classifies risk based on the 75 percent threshold.
     """
-    # -- RISK LEVEL CLASSIFICATION --
-    
-    # HIGH RISK: 
-    # - Current attendance is already breached (below threshold) OR
-    # - EARLY WARNING: Current is >= threshold, but it is predicted to fall below threshold.
-    if current_attendance < threshold or (current_attendance >= threshold and predicted_attendance < threshold):
+    # HIGH RISK: Already below 75%
+    if current_attendance < threshold:
         risk_level = 'HIGH'
         
-    # LOW RISK:
-    # - Current is safe (> threshold + 5) AND predicted is safe (> threshold + 5) AND trend is not significantly declining (slope >= -0.5)
+    # HIGH RISK — EARLY WARNING: Currently >= 75% but predicted to drop below 75%
+    elif current_attendance >= threshold and predicted_attendance < threshold:
+        risk_level = 'HIGH'
+        
+    # LOW RISK: Safe and stable
     elif current_attendance > (threshold + 5) and predicted_attendance > (threshold + 5) and trend_slope >= -0.5:
         risk_level = 'LOW'
         
-    # MEDIUM RISK:
-    # - Catch-all for scenarios where attendance is between threshold and threshold+5, predicted is between threshold and threshold+5, 
-    #   or there's a significant decline (slope < -0.5) but it hasn't triggered the HIGH risk threshold yet.
+    # MEDIUM RISK: Warning zone or declining but not yet HIGH
     else:
         risk_level = 'MEDIUM'
         
-    # -- RISK SCORE CALCULATION --
-    # Calculate a raw risk metric where lower attendance = higher risk.
-    # We heavily weight the predicted attendance to prioritize early warning.
+    # Calculate an interpretable 0-100 risk score
     raw_score = ((100 - current_attendance) * 0.4) + ((100 - predicted_attendance) * 0.6) - (trend_slope * 3.0)
     
-    # Normalize and clamp the score based on the assigned level to make it highly interpretable (0-100 scale)
     if risk_level == 'HIGH':
         risk_score = max(75.0, min(100.0, raw_score + 60.0))
     elif risk_level == 'MEDIUM':
@@ -181,47 +168,38 @@ def classify_risk(current_attendance, predicted_attendance, trend_slope, thresho
         
     return risk_level, round(risk_score, 1)
 
-def analyze_student_attendance(attendance_values, periods_ahead=4, threshold=75):
+
+# ==================================================
+# 7. ANALYZE ONE STUDENT
+# ==================================================
+def analyze_student_attendance(attendance_values, periods_ahead=PREDICTION_PERIODS, threshold=ATTENDANCE_THRESHOLD):
     """
-    Analyzes student attendance history to generate trends, predictions, and risk classifications.
-    
-    Args:
-        attendance_values (list, pandas Series, or numpy array): Chronological attendance history.
-        periods_ahead (int): Number of periods into the future to predict (default 4).
-        threshold (float): The attendance threshold for intervention (default 75).
-        
-    Returns:
-        dict: Analysis results.
+    Analyzes one student's attendance history and generates a prediction.
     """
-    # 1. Validate the attendance history
-    try:
-        y = np.array(attendance_values, dtype=float)
-    except (ValueError, TypeError):
-        raise ValueError("attendance_values must be convertible to a numeric array.")
-        
+    y = np.array(attendance_values, dtype=float)
     if len(y) < 2:
-        raise ValueError("At least 2 attendance values are required for analysis.")
+        raise ValueError("Insufficient data.")
         
-    # 2. Get the latest attendance as current_attendance
+    # Attendance History -> Current Attendance
     current_attendance = float(y[-1])
     
-    # 3 & 4. Calculate trend slope and direction
+    # Trend Analysis
     trend_slope = calculate_trend(y)
     trend_direction = get_trend_direction(trend_slope)
     
-    # 5. Predict future attendance
-    future_predictions, _ = predict_future_attendance(y, periods_ahead=periods_ahead)
+    # Future Prediction
+    future_predictions, _ = predict_future_attendance(y, periods_ahead)
     predicted_attendance = future_predictions[-1]
     
-    # 6 & 7. Calculate risk_score and risk_level
+    # Risk Classification
     risk_level, risk_score = classify_risk(
         current_attendance, 
         predicted_attendance, 
         trend_slope, 
-        threshold=threshold
+        threshold
     )
     
-    # Return numerical results rounded appropriately
+    # Return clearly structured dictionary
     return {
         "current_attendance": round(current_attendance, 2),
         "trend_slope": round(trend_slope, 2),
@@ -231,46 +209,34 @@ def analyze_student_attendance(attendance_values, periods_ahead=4, threshold=75)
         "risk_level": risk_level
     }
 
-def analyze_all_students(df, periods_ahead=4, threshold=75):
+
+# ==================================================
+# 8. ANALYZE ALL STUDENTS
+# ==================================================
+def analyze_all_students(df, periods_ahead=PREDICTION_PERIODS, threshold=ATTENDANCE_THRESHOLD):
     """
-    Analyzes attendance for all students and subjects in the dataset.
-    
-    Args:
-        df (pandas.DataFrame): The cleaned attendance DataFrame.
-        periods_ahead (int): Number of periods into the future to predict.
-        threshold (float): The attendance threshold for intervention.
-        
-    Returns:
-        pandas.DataFrame: A new DataFrame with the analysis results per student/subject.
+    Analyzes attendance for every unique student-subject combination.
     """
     results = []
     
-    # 1. Group by student_id and subject
+    # Group by student_id and subject
     grouped = df.groupby(['student_id', 'subject'])
     
     for (student, subject), group in grouped:
-        # 2. Sort every group by week
+        # Sort attendance chronologically
         group = group.sort_values(by='week')
-        
-        # 3. Extract attendance_percentage as chronological history
         history = group['attendance_percentage'].tolist()
         
-        # Extract student metadata (take from the first row of the group)
         name = group['name'].iloc[0] if 'name' in group.columns else "Unknown"
         section = group['section'].iloc[0] if 'section' in group.columns else "Unknown"
         branch = group['branch'].iloc[0] if 'branch' in group.columns else "Unknown"
         semester = group['semester'].iloc[0] if 'semester' in group.columns else "Unknown"
         
-        # 6. Handle groups with insufficient history safely
         try:
-            # 4. Run analyze_student_attendance
-            analysis = analyze_student_attendance(
-                history, 
-                periods_ahead=periods_ahead, 
-                threshold=threshold
-            )
+            # Analyze each student-subject combination
+            analysis = analyze_student_attendance(history, periods_ahead, threshold)
             
-            # Combine identifiers with the analysis dictionary
+            # Store results
             row = {
                 'student_id': student,
                 'name': name,
@@ -282,69 +248,78 @@ def analyze_all_students(df, periods_ahead=4, threshold=75):
             }
             results.append(row)
         except Exception as e:
-            print(f"Warning: Could not analyze {student} - {subject}. Reason: {e}")
+            pass
             
-    # 5. Build and return a new pandas DataFrame (satisfies rule 7: don't modify original)
     return pd.DataFrame(results)
 
+
+# ==================================================
+# 9. EARLY WARNING FILTER
+# ==================================================
+def extract_early_warnings(results_df, threshold=ATTENDANCE_THRESHOLD):
+    """
+    Extracts proactive early warnings where:
+    current attendance >= 75 AND predicted attendance < 75
+    """
+    return results_df[
+        (results_df['current_attendance'] >= threshold) & 
+        (results_df['predicted_attendance'] < threshold)
+    ]
+
+
+# ==================================================
+# 10. MAIN EXECUTION PIPELINE
+# ==================================================
 if __name__ == "__main__":
-    # Define input and output paths
     base_dir = os.path.dirname(os.path.abspath(__file__))
     input_csv = os.path.join(base_dir, "data", "attendance_dataset.csv.xls")
     output_csv = os.path.join(base_dir, "prediction_results.csv")
+    early_warning_csv = os.path.join(base_dir, "early_warning_students.csv")
     
     if os.path.exists(input_csv):
-        # 1. Load the sample attendance data
-        print(f"Loading dataset from {input_csv}...")
+        print("========================================")
+        print("1. Loading Dataset")
+        print("========================================")
         df = load_attendance_data(input_csv)
-        print(f"Dataset loaded with {len(df)} records.\n")
+        print(f"Loaded {len(df)} records.\n")
         
-        print("--- Dataset Verification ---")
-        print(f"Shape: {df.shape}")
-        print(f"Columns: {list(df.columns)}")
-        print("\nFirst 5 rows:")
-        print(df.head().to_string())
-        print("----------------------------\n")
-        
-        # 2. Run analyze_all_students
-        print("Running batch analysis across all students and subjects...")
+        print("========================================")
+        print("2. Analyzing Students")
+        print("========================================")
         results_df = analyze_all_students(df)
+        print(f"Analyzed {len(results_df)} student-subject combinations.\n")
         
-        # 4. Sort results by risk_score from highest to lowest
+        print("========================================")
+        print("3. Sorting Results")
+        print("========================================")
         results_df = results_df.sort_values(by='risk_score', ascending=False).reset_index(drop=True)
+        print("Sorted by highest risk.\n")
         
-        # 3. Extract the Early Warning students
-        early_warning_df = results_df[
-            (results_df['current_attendance'] >= 75) & 
-            (results_df['predicted_attendance'] < 75)
-        ]
+        print("========================================")
+        print("4. Creating Early Warning List")
+        print("========================================")
+        early_warning_df = extract_early_warnings(results_df)
+        print(f"Found {len(early_warning_df)} early warning cases.\n")
         
-        # 4. Save the main DataFrame
+        print("========================================")
+        print("5. Saving Results")
+        print("========================================")
         results_df.to_csv(output_csv, index=False)
-        
-        # 5. Save the early warning DataFrame
-        early_warning_csv = os.path.join(base_dir, "early_warning_students.csv")
         early_warning_df.to_csv(early_warning_csv, index=False)
+        print(f"Saved: {os.path.basename(output_csv)}")
+        print(f"Saved: {os.path.basename(early_warning_csv)}\n")
         
-        # 6. Print confirmation
-        print("\n--- Final Save Confirmation ---")
-        print(f"Saved {len(results_df)} total prediction records to: {os.path.basename(output_csv)}")
-        print(f"Saved {len(early_warning_df)} early warning students to: {os.path.basename(early_warning_csv)}")
-        print("-------------------------------")
-        
-        # 7. Print a summary containing counts
-        total_analyzed = len(results_df)
+        print("========================================")
+        print("6. Summary")
+        print("========================================")
         high_count = len(results_df[results_df['risk_level'] == 'HIGH'])
         medium_count = len(results_df[results_df['risk_level'] == 'MEDIUM'])
         low_count = len(results_df[results_df['risk_level'] == 'LOW'])
         
-        print("\n--- Prediction Summary ---")
-        print(f"Total Records Analyzed: {total_analyzed}")
-        print(f"HIGH Risk Count:        {high_count}")
-        print(f"MEDIUM Risk Count:      {medium_count}")
-        print(f"LOW Risk Count:         {low_count}")
-        print("--------------------------\n")
+        print(f"Total Analyzed: {len(results_df)}")
+        print(f"HIGH Risk:      {high_count}")
+        print(f"MEDIUM Risk:    {medium_count}")
+        print(f"LOW Risk:       {low_count}")
+        
     else:
-        print(f"Error: Input dataset not found at {input_csv}")
-
-
+        print(f"Error: Dataset not found at {input_csv}")
